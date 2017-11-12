@@ -54,16 +54,16 @@ __实现思路__：让maskView的`maskLayer`初始位置在maskView的`frame`之
 
 接下来要完成的是根据数据状态来控制动画，简单梳理了下我们要完成的目标：
 
-|状态|动画描述|备注|
-|:-:|:-:|:-:|
-|登录中|红色maskLayer开始向右移动||
-|登录超时|红色maskLayer移动暂停在1，2两个图标之间的进度条间||
-|登录成功|红色maskLayer继续向右移动||
-|导入中|红色maskLayer继续向右移动到2至3部分||
-|导入超时|红色maskLayer移动暂停在2，3两个图标之间的进度条间||
-|导入完成|红色maskLayer继续完成剩下的动画||
-|提前完成|直接从当前的百分比位置快速完成剩下的动画|发生时机随机|
-|恢复进度|从任意进度恢复动画||
+|状态|动画描述|
+|:-:|:-:|
+|登录中|红色maskLayer开始向右移动|
+|登录超时|红色maskLayer移动暂停在1，2两个图标之间的进度条间|
+|登录成功|红色maskLayer继续向右移动|
+|导入中|红色maskLayer继续向右移动到2至3部分|
+|导入超时|红色maskLayer移动暂停在2，3两个图标之间的进度条间|
+|导入完成|红色maskLayer继续完成剩下的动画|
+|提前完成|直接从当前的百分比位置快速完成剩下的动画|
+|恢复进度|从任意进度恢复动画|
 
 抛开是数据，我们要完成的是以下五点：
 
@@ -73,6 +73,7 @@ __实现思路__：让maskView的`maskLayer`初始位置在maskView的`frame`之
 4. 从任意进度值初始化动画
 5. 从当前进度值快速完成动画
 
+---
 ##### 2.1 设定超时机制
 
 这一步其实比较简单
@@ -100,6 +101,7 @@ static const CGFloat kGeneralImportTime = 30.0;
 }
 ```
 
+---
 ##### 2.2 暂停动画
 
 ``` objectivec
@@ -108,9 +110,11 @@ static const CGFloat kGeneralImportTime = 30.0;
     CFTimeInterval pausedTime = [_maskLayer convertTime:CACurrentMediaTime() fromLayer:nil];
     self.layer.speed = 0.0;
     self.layer.timeOffset = pausedTime;
-}
-``` 
+} 
+```
 
+
+---
 ##### 2.3 恢复动画
 
 ``` objectivec
@@ -123,8 +127,9 @@ static const CGFloat kGeneralImportTime = 30.0;
     CFTimeInterval timeSincePause = [_maskLayer convertTime:CACurrentMediaTime() fromLayer:nil] - pausedTime;
     self.layer.beginTime = timeSincePause;
 }
-
 ``` 
+
+---
 ##### 2.4 从任意进度值初始化
 
 ``` objectivec
@@ -158,9 +163,51 @@ static const CGFloat kGeneralImportTime = 30.0;
 }
 ```
 
-### 不足
+##### 2.5 从当前进度值快速完成动画
 
-[demo地址]()
+``` objectivec
+//  提前结束动画
+- (void)animationAdvancedFinished
+{
+    [self resumeLayer];
+    
+    CGFloat duration = _advancedFinishDuring;
+    NSArray *values = @[[NSValue valueWithCGPoint:_lastPresentPosition],
+                        [NSValue valueWithCGPoint:CGPointMake(0, 0)]];
+    CAKeyframeAnimation *animation = [CAKeyframeAnimation animationWithKeyPath:@"position"];
+    animation.values = values;
+    animation.duration = duration;
+    animation.delegate = self;
+    //提前结束动画完成之后保留mask层的位置信息，保持动画完成时的样式
+    animation.fillMode = kCAFillModeForwards;
+    animation.removedOnCompletion = NO;
+    [_maskLayer addAnimation:animation forKey:@"AdvancedMaskAnimation"];
+}
+```
+
+上面代码片段中的`_advancedFinishDuring`动画时间，是根据触发快速完成动画时的进度值百分比 乘以 快速完成动画所需要的总时间计算出来的。下面是计算的一个例子：
+
+``` objectivec
+- (void)verifySuccess {
+    [self resumeLayer];
+    self.status = Importing;
+    self.displayLink.paused = NO;
+    if (!self.loginSuccessTime) {
+        self.loginSuccessTime = self.currentTime;
+    }
+    self.advancedFinishDuring = ((-_lastPresentPosition.x) / CGRectGetWidth(self.frame)) * kGeneralCacheCompleteTime;
+}
+```
+
+ __至此进度控制就可以的需求就可以使用以上的关键方法完成了__, 查看完成的逻辑可以下载demo查看
+  [Demo地址](https://github.com/HuyangJake/SimpleMaskAnimation)
+ ![demo](http://ojam5z7vg.bkt.clouddn.com/coldreading/jpg/maskAnimation.png-blog)
+
+### 不足
+* 进度控制部分的超时跟maskLayer位置的对应关系比较生硬
+
+
+*个人对动画理解还不深，代码笨拙。还请朋友多批评指教！*
 
 
 
